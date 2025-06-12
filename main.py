@@ -50,11 +50,11 @@ async def handle_start(message: types.Message):
         reply_markup=get_main_menu_keyboard()
     )
 
-def get_category_keyboard(questions: List[Tuple[int, str]]):
+def get_category_keyboard(questions: List[Tuple[int, str]], category_id: int):
     print(questions)
     buttons = [
-        [InlineKeyboardButton(text=f"{question[0]}. {question[1]}", 
-                              callback_data=f"question_{question[0]}")]
+        [InlineKeyboardButton(text=f"{question[0] + 1}. {question[1]}", 
+                              callback_data=f"question_{category_id}_{question[0]}")]
          for question in questions
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -66,12 +66,23 @@ async def handler_category_selection(callback_query: CallbackQuery):
     category = data["topics"][category_id]
     category_name = category["name"]
     logger.info(f"user chouse category with id {category_id}, category_name: {category_name}")
-    questions = [(i["id"], i["question"]) for i in category["questions"]]
+    questions = [(i["local_id"], i["question"]) for i in category["questions"]]
     await callback_query.message.answer(
         f"Вы выбрали категорию {category_name}\n",
-        reply_markup=get_category_keyboard(questions)
+        reply_markup=get_category_keyboard(questions, category_id)
         )
 
+@dp.callback_query(F.data.startswith("question_"))
+async def handler_question_selection(callback_query: CallbackQuery):
+    category_id, question_id = list(map(int, callback_query.data.split("_")[1:]))
+    logger.info(f"get question with id: {question_id} and category_id: {category_id}")
+    category = data["topics"][category_id]
+    answer = category["questions"][question_id]["answer"]
+    await callback_query.message.answer(
+        f"{answer}"
+    )
+    
+    
 async def main():
     await load_data()
     await dp.start_polling(bot)

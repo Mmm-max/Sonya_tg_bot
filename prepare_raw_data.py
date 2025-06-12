@@ -30,7 +30,7 @@ with open("files/text.txt", "r") as file:
             question_id = question_pattern_match[0][0]
             # print(f"Current question: {question}, id: {question_id}")
             continue
-        answer_pattern_match = re.match(answer_pattern, line)
+        answer_pattern_match = re.findall(answer_pattern, line)
         if answer_pattern_match:
             # print(f"Answer: {answer_pattern_match[0]}")
             if question is None:
