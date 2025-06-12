@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from collections import deque
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
@@ -20,6 +21,9 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 data =  {}
+user_last_question_msg = {}
+user_last_topic_msg = {}
+user_last_start_msg = {}
 
 async def load_data():
     global data
@@ -42,45 +46,75 @@ def get_main_menu_keyboard():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-
+async def delete_message(chat_id: int, message_id: int):
+    try:
+        await bot.delete_message(chat_id, message_id)
+    except Exception as e:
+        logger.warning(f"Не удалось удалить сообщение {message_id} в чате {chat_id}: {e}")
+        
+        
 @dp.message(CommandStart())
 async def handle_start(message: types.Message):
-    await message.reply(
+    user_id = message.from_user.id
+    last_msg_id = user_last_start_msg.get(user_id)
+    if last_msg_id:
+        await delete_message(message.chat.id, last_msg_id)
+    sent_msg = await message.reply(
         START_MESSAGE,
         reply_markup=get_main_menu_keyboard()
     )
+    user_last_start_msg[user_id] = sent_msg.message_id
 
 def get_category_keyboard(questions: List[Tuple[int, str]], category_id: int):
-    print(questions)
     buttons = [
         [InlineKeyboardButton(text=f"{question[0] + 1}. {question[1]}", 
                               callback_data=f"question_{category_id}_{question[0]}")]
-         for question in questions
-    ]
+         for question in questions]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 @dp.callback_query(F.data.startswith("topic_"))
 async def handler_category_selection(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    last_msg_id = user_last_topic_msg.get(user_id)
+    if last_msg_id:
+       await delete_message(callback_query.message.chat.id, last_msg_id)
     category_id = int(callback_query.data.split("_")[1])
     category = data["topics"][category_id]
     category_name = category["name"]
     logger.info(f"user chouse category with id {category_id}, category_name: {category_name}")
     questions = [(i["local_id"], i["question"]) for i in category["questions"]]
-    await callback_query.message.answer(
+    sent_msg = await callback_query.message.answer(
         f"Вы выбрали категорию {category_name}\n",
         reply_markup=get_category_keyboard(questions, category_id)
         )
+    user_last_topic_msg[user_id] = sent_msg.message_id
+    
 
 @dp.callback_query(F.data.startswith("question_"))
 async def handler_question_selection(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    last_msg_ids = user_last_question_msg.get(user_id)
+    if last_msg_ids and len(last_msg_ids) == 3:
+        msg_id, mgs_link_id = last_msg_ids.popleft()
+        await delete_message(callback_query.message.chat.id, msg_id)
+        await delete_message(callback_query.message.chat.id, mgs_link_id)
+
     category_id, question_id = list(map(int, callback_query.data.split("_")[1:]))
     logger.info(f"get question with id: {question_id} and category_id: {category_id}")
     category = data["topics"][category_id]
     answer = category["questions"][question_id]["answer"]
-    await callback_query.message.answer(
+    link = category["questions"][question_id]["link"]
+    sent_msg = await callback_query.message.answer(
         f"{answer}"
     )
+    sent_link = await callback_query.message.answer(
+        f"{link}"
+    )
+    if last_msg_ids and len(last_msg_ids) < 3:
+        user_last_question_msg[user_id].append((sent_msg.message_id, sent_link.message_id))
+    else:
+        user_last_question_msg[user_id] = deque([(sent_msg.message_id, sent_link.message_id)], maxlen=3)
     
     
 async def main():
