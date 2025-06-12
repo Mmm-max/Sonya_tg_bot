@@ -1,0 +1,14 @@
+# Python
+__pycashe__/
+*.pyc
+*.pyo
+*.pyd
+.Python/
+env/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# uv
+./uv/
+uv.lock
