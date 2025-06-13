@@ -61,7 +61,8 @@ async def handle_start(message: types.Message):
         await delete_message(message.chat.id, last_msg_id)
     sent_msg = await message.reply(
         START_MESSAGE,
-        reply_markup=get_main_menu_keyboard()
+        reply_markup=get_main_menu_keyboard(),
+        parse_mode=ParseMode.HTML
     )
     user_last_start_msg[user_id] = sent_msg.message_id
 
@@ -79,6 +80,12 @@ async def handler_category_selection(callback_query: CallbackQuery):
     last_msg_id = user_last_topic_msg.get(user_id)
     if last_msg_id:
        await delete_message(callback_query.message.chat.id, last_msg_id)
+    last_msg_ids = user_last_question_msg.get(user_id)
+    if last_msg_ids:
+        for msg_id, link_id in last_msg_ids:
+            await delete_message(callback_query.message.chat.id, msg_id)
+            await delete_message(callback_query.message.chat.id, link_id)
+        user_last_question_msg[user_id] = deque(maxlen=3)
     category_id = int(callback_query.data.split("_")[1])
     category = data["topics"][category_id]
     category_name = category["name"]
